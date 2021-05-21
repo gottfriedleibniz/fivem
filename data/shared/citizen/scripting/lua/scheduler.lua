@@ -12,6 +12,20 @@ msgpack.set_string('string_compat')
 msgpack.set_integer('unsigned')
 msgpack.set_array('without_hole')
 msgpack.setoption('empty_table_as_array', true)
+msgpack.setoption('sentinel', false) -- Only allow encoding sentinels (decoding creates nils)
+
+-- Replace nil's in varargs w/ msgpack sentinels
+local select = select
+local msgpack_null = msgpack.null
+local function MsgpackSanitize(...)
+	local t = {...}
+	for i=1,select("#", ...) do
+		if t[i] == nil then
+			t[i] = msgpack_null
+		end
+	end
+	return t
+end
 
 -- setup json compat
 json.version = json._VERSION -- Version compatibility
@@ -457,7 +471,7 @@ function RegisterNetEvent(eventName, cb)
 end
 
 function TriggerEvent(eventName, ...)
-	local payload = msgpack.pack({...})
+	local payload = msgpack.pack(MsgpackSanitize(...))
 
 	return runWithBoundaryEnd(function()
 		return TriggerEventInternal(eventName, payload, payload:len())
@@ -466,13 +480,13 @@ end
 
 if isDuplicityVersion then
 	function TriggerClientEvent(eventName, playerId, ...)
-		local payload = msgpack.pack({...})
+		local payload = msgpack.pack(MsgpackSanitize(...))
 
 		return TriggerClientEventInternal(eventName, playerId, payload, payload:len())
 	end
 	
 	function TriggerLatentClientEvent(eventName, playerId, bps, ...)
-		local payload = msgpack.pack({...})
+		local payload = msgpack.pack(MsgpackSanitize(...))
 
 		return TriggerLatentClientEventInternal(eventName, playerId, payload, payload:len(), tonumber(bps))
 	end
@@ -535,13 +549,13 @@ if isDuplicityVersion then
 	end
 else
 	function TriggerServerEvent(eventName, ...)
-		local payload = msgpack.pack({...})
+		local payload = msgpack.pack(MsgpackSanitize(...))
 
 		return TriggerServerEventInternal(eventName, payload, payload:len())
 	end
 	
 	function TriggerLatentServerEvent(eventName, bps, ...)
-		local payload = msgpack.pack({...})
+		local payload = msgpack.pack(MsgpackSanitize(...))
 
 		return TriggerLatentServerEventInternal(eventName, payload, payload:len(), tonumber(bps))
 	end
@@ -827,7 +841,7 @@ funcref_mt = msgpack.extend({
 		local ref = rawget(t, '__cfx_functionReference')
 
 		if not netSource then
-			local args = msgpack.pack({...})
+			local args = msgpack.pack(MsgpackSanitize(...))
 
 			-- as Lua doesn't allow directly getting lengths from a data buffer, and _s will zero-terminate, we have a wrapper in the game itself
 			local rv = runWithBoundaryEnd(function()
